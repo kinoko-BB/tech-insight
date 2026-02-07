@@ -422,6 +422,253 @@ async def update_article(article_id: int, data: ArticleUpdate) -> Article:
 
 ---
 
+## 13. フロントエンドテスト: Vitest + React Testing Library + MSW
+
+### 選択: Vitest + React Testing Library + MSW
+
+### 決定理由
+
+1. **Vitest**
+   - ESMネイティブ対応でNext.js 16と親和性が高い（Jestは `--experimental-vm-modules` 等の追加設定が必要）
+   - Jest互換APIで学習コスト低、TypeScript・JSXゼロ設定
+
+2. **React Testing Library (v16+)**
+   - ユーザー操作・表示に着目したテスト（実装詳細に依存しない）
+   - React 19対応
+
+3. **MSW v2**
+   - ネットワークレベルでfetchをインターセプトし、APIクライアントの実装詳細に依存しないモック
+   - `vi.mock` よりも保守性が高い
+
+4. **E2Eテスト (Playwright) は導入しない**
+   - 1週間の時間制約、Dockerへのブラウザバイナリ追加コスト
+   - バックエンドpytestがAPI統合をカバー済み。将来的な拡張として検討
+
+### 代替案との比較
+
+| 選択肢 | メリット | デメリット | 判定 |
+|--------|---------|-----------|------|
+| **Vitest** | ESMネイティブ、高速、Jest互換 | エコシステムがJestより小さい | ✅ 採用 |
+| Jest | 情報豊富 | ESM設定煩雑 | ❌ 設定コスト |
+| **MSW v2** | ネットワークレベルモック | ハンドラ定義が必要 | ✅ 採用 |
+| vi.mock | シンプル | 実装詳細への結合度高 | ❌ 保守性 |
+| Playwright / Cypress | 実ブラウザE2E | 環境構築コスト大 | ❌ 時間制約 |
+
+---
+
+---
+
+## 14. アーキテクチャ: レポジトリパターンを採用しない
+
+### 決定: SQLAlchemy直接利用（レポジトリパターン不採用）
+
+### 決定理由
+
+1. **プロジェクト規模とエンティティ数**
+   - 記事（Article）のみの単一エンティティ
+   - ドメインロジックが最小限
+   - レポジトリ層を導入するほどの複雑性がない
+
+2. **SQLAlchemyの高機能性**
+   - Session APIがすでに抽象化を提供
+   - クエリビルダーが柔軟で直感的
+   - テスト時のモック化も容易
+
+3. **過剰設計の回避**
+   - 1000件規模では追加の抽象化レイヤーが冗長
+   - コード量増加によるメンテナンスコスト
+   - チーム規模（1人→少人数）に対して過剰
+
+### 実装方針
+
+```python
+# services/article_service.py
+async def get_articles(
+    db: AsyncSession,
+    skip: int = 0,
+    limit: int = 50
+) -> list[Article]:
+    """SQLAlchemyを直接利用したシンプルな実装"""
+    result = await db.execute(
+        select(Article)
+        .order_by(Article.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    return result.scalars().all()
+```
+
+### 将来の拡張性
+
+**Phase 2以降（10万件超、複数エンティティ追加時）の検討事項:**
+- User、Tag、Comment等のエンティティ追加時にレポジトリ層を導入
+- 複雑なクエリロジックが増えた場合に抽象化を検討
+
+---
+
+## 15. 開発体験（DX）の向上
+
+### 1. Makefileによるコマンド集約
+
+**導入理由:**
+- 開発者が頻繁に実行するコマンドを短縮化
+- Docker Composeの複雑なコマンドを覚える必要なし
+- チーム全員が統一されたワークフローで作業可能
+
+**主要コマンド:**
+
+| コマンド | 機能 | 用途 |
+|---------|------|------|
+| `make dev` | フォアグラウンド起動 | 開発中のログ監視 |
+| `make up` | バックグラウンド起動 | バックグラウンド実行 |
+| `make logs-backend` | バックエンドログ | デバッグ |
+| `make db-shell` | PostgreSQL接続 | DB確認 |
+| `make db-count` | レコード数確認 | データ投入確認 |
+| `make clean` | 完全クリーンアップ | 環境リセット |
+| `make help` | コマンド一覧表示 | 使い方確認 |
+
+**開発フロー例:**
+```bash
+# 初回起動
+make dev-build
+
+# 日常開発
+make dev          # ログを見ながら開発
+make logs-backend # バックエンドのみ監視
+
+# DB確認
+make db-count     # データ投入確認
+make db-shell     # SQL直接実行
+
+# トラブル時
+make clean        # 完全リセット
+make dev-build    # 再構築
+```
+
+### 2. Hot Reload対応
+
+**バックエンド（FastAPI + uvicorn）:**
+```python
+# uvicornの --reload オプションでファイル変更を監視
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+```
+
+**フロントエンド（Next.js）:**
+```javascript
+// Next.js標準のFast Refresh機能
+// 開発サーバーが自動でReactコンポーネントを差分更新
+npm run dev  // turbopack使用で高速リロード
+```
+
+**Docker Composeのボリュームマウント:**
+```yaml
+volumes:
+  - ./backend:/app       # バックエンドコード同期
+  - ./frontend:/app      # フロントエンドコード同期
+  - /app/node_modules    # node_modules除外（パフォーマンス）
+```
+
+**開発体験への影響:**
+- コード変更後、数秒以内にブラウザ/APIに反映
+- コンテナ再起動不要
+- 高速なイテレーション開発が可能
+
+---
+
+## 16. テスト戦略
+
+### 概要
+
+プロジェクト規模と開発期間を考慮し、**投資対効果の高いテストに集中**する戦略を採用。
+
+### バックエンド: pytest + 統合テスト中心
+
+**選択: 統合テスト（API E2Eテスト）を優先**
+
+```python
+# tests/test_articles_api.py
+async def test_create_article(client: AsyncClient):
+    """記事作成APIの統合テスト"""
+    response = await client.post("/api/articles", json={
+        "title": "Test Article",
+        "content": "Content",
+        "category": "Backend"
+    })
+    assert response.status_code == 201
+    assert response.json()["title"] == "Test Article"
+```
+
+**テスト範囲:**
+- 記事CRUD操作（作成・取得・一覧・更新・削除）
+- セマンティック検索・キーワード検索
+- バリデーションエラー（422レスポンス）
+- 存在しないリソース（404レスポンス）
+- ページネーション・カテゴリフィルタ
+
+**単体テストを最小限にした理由:**
+- 1週間の開発期間制約
+- ビジネスロジックが薄い（CRUD中心）
+- 統合テストでカバー範囲が広い
+
+### フロントエンド: Vitest + React Testing Library + MSW
+
+**テスト方針:**
+
+| レイヤー | テストツール | 対象 | 優先度 |
+|---------|------------|------|-------|
+| バリデーション | Vitest | zodスキーマ | 高 |
+| コンポーネント | RTL | ArticleForm, Modal | 中 |
+| API統合 | MSW | fetchクライアント | 中 |
+| ページ統合 | RTL + MSW | 管理画面フロー | 低 |
+
+**テスト範囲:**
+```typescript
+// lib/validations.test.ts
+describe('articleCreateSchema', () => {
+  it('正常系: 必須項目のみで成功', () => {
+    const result = articleCreateSchema.safeParse({
+      title: 'Valid Title',
+      content: 'Valid Content'
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('異常系: タイトル空文字でエラー', () => {
+    const result = articleCreateSchema.safeParse({
+      title: '',
+      content: 'Valid Content'
+    });
+    expect(result.success).toBe(false);
+  });
+});
+```
+
+### E2Eテスト（Playwright）: 導入しない
+
+**理由:**
+- 開発期間の制約（1週間）
+- Dockerへのブラウザバイナリ追加コスト
+- バックエンドpytestでAPI層を十分カバー
+- 現時点での費用対効果が低い
+
+**将来的な導入タイミング:**
+- ユーザーフローが複雑化した場合（マルチステップフォーム等）
+- 本番環境での回帰テストが必要になった場合
+
+### テスト戦略の基本方針
+
+**投資対効果が高いテストに集中:**
+1. バックエンド統合テスト（pytestでAPI全体をカバー）
+2. バリデーションロジック（zodスキーマの境界値テスト）
+3. 重要UIコンポーネント（ArticleFormの送信フロー）
+
+**投資対効果が低いため除外:**
+1. E2Eテスト（Playwright）→ 開発期間制約
+2. 単体テストの網羅的実装 → ビジネスロジック薄い
+3. スタイルのスナップショットテスト → UI変更頻度高い
+
+---
+
 ## まとめ
 
 | 観点 | 決定事項 | 主な理由 |
@@ -434,3 +681,7 @@ async def update_article(article_id: int, data: ArticleUpdate) -> Article:
 | 検索 | セマンティック + キーワード | ユースケース対応の柔軟性 |
 | 型安全 | TypeScript + Pydantic | チーム開発の品質確保 |
 | データ構造 | カテゴリ（単一値） | 初期データに合わせたシンプル設計 |
+| アーキテクチャ | レポジトリパターン不採用 | 単一エンティティ、SQLAlchemyで十分 |
+| DX | Makefile + Hot Reload | 開発効率向上、統一ワークフロー |
+| テスト | 統合テスト中心 | 投資対効果重視、開発期間制約 |
+| フロントエンドテスト | Vitest + RTL + MSW | ESMネイティブ、ユーザー視点テスト、実装非依存モック |

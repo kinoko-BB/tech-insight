@@ -8,11 +8,19 @@ POSTGRES_DB ?= techinsight
 
 COMPOSE = docker compose
 
-.DEFAULT_GOAL := help
+.DEFAULT_GOAL := dev
 
 # ==============================================================================
 # Docker Compose
 # ==============================================================================
+
+.PHONY: dev
+dev: ## フォアグラウンドで全サービス起動（ログ表示）
+	$(COMPOSE) up
+
+.PHONY: dev-build
+dev-build: ## リビルドしてフォアグラウンド起動
+	$(COMPOSE) up --build
 
 .PHONY: up
 up: ## 全サービスをバックグラウンド起動
@@ -82,6 +90,10 @@ db-count: ## articles のレコード数表示
 backend-shell: ## backend コンテナに bash 接続
 	$(COMPOSE) exec backend bash
 
+.PHONY: frontend-shell
+frontend-shell: ## frontend コンテナに接続
+	$(COMPOSE) exec frontend sh
+
 .PHONY: migrate
 migrate: ## Alembic マイグレーション実行
 	$(COMPOSE) exec backend alembic upgrade head
@@ -89,6 +101,16 @@ migrate: ## Alembic マイグレーション実行
 .PHONY: seed
 seed: ## 初期データ投入
 	$(COMPOSE) exec backend python -m scripts.seed_data
+
+.PHONY: clean
+clean: ## コンテナ・ボリューム・イメージ全削除
+	$(COMPOSE) down -v --rmi all --remove-orphans
+
+.PHONY: db-reset
+db-reset: ## DBボリューム削除して再作成
+	$(COMPOSE) down -v
+	$(COMPOSE) up -d db
+	$(COMPOSE) up -d backend
 
 .PHONY: help
 help: ## コマンド一覧表示

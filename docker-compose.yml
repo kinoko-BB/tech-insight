@@ -24,6 +24,8 @@ services:
       DATABASE_URL_SYNC: ${DATABASE_URL_SYNC:-postgresql+psycopg://postgres:postgres@db:5432/techinsight}
     volumes:
       - ./articles.csv:/app/articles.csv:ro
+      - ./backend/app:/app/app
+      - ./backend/scripts:/app/scripts
     depends_on:
       db:
         condition: service_healthy
@@ -32,6 +34,14 @@ services:
     build: ./frontend
     ports:
       - "3000:3000"
+    environment:
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ./frontend/app:/app/app
+      - ./frontend/components:/app/components
+      - ./frontend/lib:/app/lib
+      - ./frontend/types:/app/types
+      - ./frontend/public:/app/public
     depends_on:
       - backend
 
