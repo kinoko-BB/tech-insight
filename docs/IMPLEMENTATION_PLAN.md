@@ -170,6 +170,7 @@ tech-insight/
 **目標:** 品質保証とパフォーマンス改善
 
 - [ ] pytestによるバックエンドAPI統合テスト（CRUD・検索エンドポイント）
+- [ ] Vitestによるフロントエンドテスト（バリデーション・コンポーネント・統合テスト）
 - [ ] HNSWインデックス最適化
 - [ ] ページネーション実装
 - [ ] エラーハンドリング強化
@@ -249,4 +250,33 @@ tests/
 **実行方法:**
 ```bash
 docker compose exec backend pytest tests/ -v
+```
+
+### フロントエンドテスト（Vitest + RTL + MSW）
+
+```
+frontend/
+├── __tests__/
+│   ├── setup.ts                    # MSW lifecycle, cleanup, Next.js モック
+│   ├── test-utils.tsx              # QueryClient ラッパー付きカスタム render
+│   ├── mocks/                      # MSW ハンドラ・フィクスチャ
+│   ├── lib/                        # validations.test.ts, api.test.ts
+│   ├── components/                 # ArticleForm, Modal, Pagination 等
+│   └── app/                        # page.test.tsx, admin/page.test.tsx
+└── vitest.config.ts
+```
+
+**テスト対象:**
+- Zodバリデーション（articleCreateSchema / articleUpdateSchema の正常系・エラー系・境界値）
+- ArticleForm（新規作成/編集の表示切替、送信、バリデーションエラー表示、APIエラー表示）
+- APIクライアント（各エンドポイントのリクエスト構築、エラーハンドリング）
+- UIコンポーネント（Modal開閉・Escape・オーバーレイ、Paginationの状態管理）
+- ページ統合（管理画面のCRUD操作フロー、トップページのカテゴリフィルタ連携）
+
+**テスト対象外:** Tailwindスタイル、Next.jsルーティング、LoadingSpinner単体
+
+**実行方法:**
+```bash
+cd frontend && npm run test
+# scripts: "test": "vitest run", "test:watch": "vitest", "test:coverage": "vitest run --coverage"
 ```
