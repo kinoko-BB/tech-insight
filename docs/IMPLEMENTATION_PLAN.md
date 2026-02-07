@@ -10,24 +10,33 @@ TechInsightは、技術記事を収集・検索できるWebアプリケーショ
 ### フロントエンド
 | 技術 | バージョン | 用途 |
 |------|-----------|------|
-| Next.js | 14.x | Reactフレームワーク |
+| Next.js | 16.x | Reactフレームワーク |
+| React | 19.x | UIライブラリ |
 | TypeScript | 5.x | 型安全な開発 |
-| Tailwind CSS | 3.x | スタイリング |
+| Tailwind CSS | 4.x | スタイリング |
 | React Query | 5.x | サーバー状態管理 |
 
 ### バックエンド
 | 技術 | バージョン | 用途 |
 |------|-----------|------|
-| FastAPI | 0.109.x | APIフレームワーク |
-| Python | 3.11+ | バックエンド言語 |
-| SQLAlchemy | 2.x | ORM |
-| Pydantic | 2.x | バリデーション |
+| FastAPI | 0.128.x | APIフレームワーク |
+| Python | 3.13 | バックエンド言語 |
+| SQLAlchemy | 2.0.46 | ORM |
+| Pydantic | 2.12.x | バリデーション |
+| uvicorn | 0.40.x | ASGIサーバー |
+| Alembic | 1.18.x | DBマイグレーション |
+| psycopg | 3.3.x | PostgreSQL同期ドライバ |
+| asyncpg | 0.31.x | PostgreSQL非同期ドライバ |
+| sentence-transformers | 5.2.x | Embedding生成 |
+| pydantic-settings | 2.12.x | 環境変数設定管理 |
+| python-multipart | 0.0.x | multipart/form-data サポート |
+| pgvector (Python) | 0.4.x | pgvector SQLAlchemyバインディング |
 
 ### データベース
 | 技術 | バージョン | 用途 |
 |------|-----------|------|
-| PostgreSQL | 15+ | メインDB |
-| pgvector | 0.5+ | ベクトル検索 |
+| PostgreSQL | 17 | メインDB |
+| pgvector (拡張) | 0.8.x | ベクトル検索 |
 | pg_trgm | - | 類似文字列検索 |
 
 ### AI/ML
@@ -41,6 +50,7 @@ TechInsightは、技術記事を収集・検索できるWebアプリケーショ
 |------|------|
 | Docker | コンテナ化 |
 | Docker Compose | ローカル開発環境 |
+| uv | Pythonパッケージマネージャ |
 
 ## 3. ディレクトリ構成
 
@@ -54,28 +64,28 @@ tech-insight/
 │   └── db-design.md
 │
 ├── frontend/
-│   ├── src/
-│   │   ├── app/                 # Next.js App Router
-│   │   │   ├── layout.tsx
-│   │   │   ├── page.tsx         # 記事一覧（メイン画面）
-│   │   │   ├── admin/
-│   │   │   │   └── page.tsx     # 管理画面（記事投稿・編集・削除）
-│   │   │   └── search/
-│   │   │       └── page.tsx
-│   │   ├── components/          # UIコンポーネント
-│   │   │   ├── ui/              # 基本UI部品
-│   │   │   ├── article/         # 記事関連（モーダル含む）
-│   │   │   │   ├── ArticleCard.tsx
-│   │   │   │   ├── ArticleModal.tsx    # 記事詳細モーダル
-│   │   │   │   └── ArticleForm.tsx     # 記事作成・編集フォーム（react-hook-form + zod）
-│   │   │   ├── search/          # 検索関連
-│   │   │   └── category/        # カテゴリ関連
-│   │   ├── lib/                 # ユーティリティ
-│   │   │   ├── api.ts           # APIクライアント
-│   │   │   ├── validations.ts   # zodスキーマ定義
-│   │   │   └── utils.ts
-│   │   └── types/               # 型定義
-│   │       └── index.ts
+│   ├── app/                     # Next.js App Router
+│   │   ├── layout.tsx
+│   │   ├── page.tsx             # 記事一覧（メイン画面）
+│   │   ├── globals.css
+│   │   ├── admin/
+│   │   │   └── page.tsx         # 管理画面（記事投稿・編集・削除）
+│   │   └── search/
+│   │       └── page.tsx
+│   ├── components/              # UIコンポーネント
+│   │   ├── ui/                  # 基本UI部品
+│   │   ├── article/             # 記事関連（モーダル含む）
+│   │   │   ├── ArticleCard.tsx
+│   │   │   ├── ArticleModal.tsx    # 記事詳細モーダル
+│   │   │   └── ArticleForm.tsx     # 記事作成・編集フォーム（react-hook-form + zod）
+│   │   ├── search/              # 検索関連
+│   │   └── category/            # カテゴリ関連
+│   ├── lib/                     # ユーティリティ
+│   │   ├── api.ts               # APIクライアント
+│   │   ├── validations.ts       # zodスキーマ定義
+│   │   └── utils.ts
+│   ├── types/                   # 型定義
+│   │   └── index.ts
 │   ├── package.json
 │   └── Dockerfile
 │
@@ -93,6 +103,8 @@ tech-insight/
 │   │   ├── routers/             # APIルーター
 │   │   │   ├── __init__.py
 │   │   │   ├── articles.py
+│   │   │   ├── categories.py
+│   │   │   ├── health.py
 │   │   │   └── search.py
 │   │   ├── services/            # ビジネスロジック
 │   │   │   ├── __init__.py
@@ -101,13 +113,12 @@ tech-insight/
 │   │   │   └── embedding_service.py
 │   │   └── utils/               # ユーティリティ
 │   │       └── __init__.py
+│   ├── scripts/
+│   │   ├── seed_data.py             # 初期データ投入（articles.csv読み込み）
+│   │   ├── generate_embeddings.py   # Embedding一括生成
+│   │   └── entrypoint.sh            # 起動スクリプト（マイグレーション→シード→Embedding生成→アプリ起動）
 │   ├── requirements.txt
 │   └── Dockerfile
-│
-├── scripts/
-│   ├── seed_data.py             # 初期データ投入（articles.csv読み込み）
-│   ├── generate_embeddings.py   # Embedding一括生成
-│   └── entrypoint.sh            # 起動スクリプト（マイグレーション→シード→Embedding生成→アプリ起動）
 │
 ├── articles.csv                 # 初期データ（1000件）
 │
@@ -207,6 +218,9 @@ docker compose up
 
 ```dockerfile
 # backend/Dockerfile（抜粋）
+# uv を使用した高速パッケージインストール
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+RUN uv pip install --system --no-cache -r requirements.txt
 # ビルド時にモデルを事前ダウンロードしてイメージにキャッシュ
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
 ```
