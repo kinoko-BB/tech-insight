@@ -38,6 +38,23 @@
 | OpenAI Embeddings | 高精度、高速 | APIキー必須 | ❌ 要件不適合 |
 | Ollama + nomic-embed | GPU活用可能 | Docker構成複雑化 | ❌ 過剰 |
 | Cohere Embeddings | 多言語対応 | APIキー必須 | ❌ 要件不適合 |
+| EmbeddingGemma-300M | MTEB最高クラス、MRL対応 | リリース4ヶ月、実績少 | ❌ 成熟度 |
+
+### Embedding モデルの選定: EmbeddingGemma-300M を検討したが e5-small を採用
+
+#### 検討した代替案: EmbeddingGemma-300M
+
+Google が2025年9月にリリースした最新モデル。MTEB で500M未満クラス最高スコア。
+
+**採用しなかった理由:**
+1. **プロジェクト規模**: 1000件規模では e5-small（384次元）で十分
+2. **エコシステム成熟度**: EmbeddingGemma はリリース4ヶ月で実績少ない
+3. **評価者環境での確実性**: e5-small は2年以上の実績、トラブルリスク最小
+4. **Docker イメージサイズ**: e5-small（500MB）の方が軽量
+
+**将来的な移行計画:**
+- 記事数が1万件を超えた場合、EmbeddingGemma-300M への移行を検討
+- MRL により 768→256次元に切り詰めることで、ストレージは e5-small と同等に維持可能
 
 ### 実装上の工夫
 
@@ -99,13 +116,61 @@ WITH (m = 16, ef_construction = 128);
 
 ---
 
-## 3. フロントエンド: Tailwind CSS
+## 3. DBドライバ: psycopg 3
 
-### 選択: Tailwind CSS 3.x
+### 選択: psycopg 3（psycopg2 からの移行）
 
 ### 決定理由
 
-1. **Next.js 14との相性**
+1. **psycopg2 のメンテナンス終了**
+   - psycopg2 は事実上レガシー扱い
+   - psycopg 3 が公式推奨の後継ドライバ
+
+2. **Python 3.13 との親和性**
+   - ネイティブ非同期サポート（asyncio対応）
+   - 型ヒントの充実
+   - C拡張に依存しないPure Python実装も提供
+
+3. **SQLAlchemy 2.x での公式サポート**
+   - `postgresql+psycopg://` スキームで直接利用可能
+   - Connection Pool との統合が安定
+
+### 代替案との比較
+
+| 選択肢 | メリット | デメリット | 判定 |
+|--------|---------|-----------|------|
+| **psycopg 3** | 公式推奨、非同期対応、型安全 | psycopg2 とのAPI差分あり | ✅ 採用 |
+| psycopg2 | 実績豊富、情報多い | メンテナンス終了方向 | ❌ レガシー |
+
+---
+
+## 4. パッケージマネージャ: uv
+
+### 選択: uv（pip からの移行）
+
+### 決定理由
+
+1. **パッケージインストールの高速化**
+   - Rust実装による10〜100倍の速度向上
+   - Dockerビルド時間の大幅短縮
+
+2. **pip 互換の使い勝手**
+   - `uv pip install` で既存の `requirements.txt` をそのまま利用可能
+   - 学習コストがほぼゼロ
+
+3. **Astral社による積極的なメンテナンス**
+   - Ruff と同じ開発元による信頼性
+   - Python エコシステムの新標準として急速に普及
+
+---
+
+## 5. フロントエンド: Tailwind CSS
+
+### 選択: Tailwind CSS 4.x
+
+### 決定理由
+
+1. **Next.js 16との相性**
    - 公式サポート、設定が容易
    - App Routerとの統合実績豊富
 
@@ -129,7 +194,7 @@ WITH (m = 16, ef_construction = 128);
 
 ---
 
-## 4. 検索戦略: セマンティック検索 + キーワード検索
+## 6. 検索戦略: セマンティック検索 + キーワード検索
 
 ### 選択: セマンティック検索 + キーワード検索の切替方式
 
@@ -160,7 +225,7 @@ async def search(query: str, mode: SearchMode) -> list[Article]:
 
 ---
 
-## 5. パフォーマンス設計
+## 7. パフォーマンス設計
 
 ### 1000件対応の設計ポイント
 
@@ -187,7 +252,7 @@ Phase 3対応（10万件超）
 
 ---
 
-## 6. チーム開発対応
+## 8. チーム開発対応
 
 ### 型定義の徹底
 
@@ -238,7 +303,7 @@ models/      # データアクセス（永続化）
 
 ---
 
-## 7. 保守運用観点
+## 9. 保守運用観点
 
 ### ログ設計
 
@@ -278,7 +343,7 @@ class Settings(BaseSettings):
 
 ---
 
-## 8. UI/UX観点
+## 10. UI/UX観点
 
 ### 検索体験の設計
 
@@ -301,7 +366,7 @@ class Settings(BaseSettings):
 
 ---
 
-## 9. データ設計
+## 11. データ設計
 
 ### 初期データ（articles.csv）
 
@@ -321,7 +386,7 @@ class Settings(BaseSettings):
 
 ---
 
-## 10. 記事更新時のEmbedding再生成
+## 12. 記事更新時のEmbedding再生成
 
 ### 方針
 
@@ -363,6 +428,8 @@ async def update_article(article_id: int, data: ArticleUpdate) -> Article:
 |------|---------|---------|
 | Embedding | sentence-transformers (e5-small) | APIキー不要、軽量、CPU実用的 |
 | ベクトルDB | pgvector | 追加サービス不要、十分な性能 |
+| DBドライバ | psycopg 3 | 公式推奨後継、非同期対応、Python 3.13親和性 |
+| パッケージマネージャ | uv | Rust実装で高速、pip互換 |
 | フロントエンド | Tailwind CSS | 高速開発、Next.js親和性 |
 | 検索 | セマンティック + キーワード | ユースケース対応の柔軟性 |
 | 型安全 | TypeScript + Pydantic | チーム開発の品質確保 |
